@@ -7,7 +7,10 @@
 #   MapLibre), so no sudo/JDK package installation is needed.
 # - Release APKs are intentionally unsigned; F-Droid signs them itself.
 # - Android artifacts are arm64-v8a only, matching the repo's `make
-#   build-release` default, so the build produces a single APK.
+#   build-release` default, so the build produces a single APK (Gradle filters
+#   the native libs to that ABI).
+# - The APK is not split per ABI, so its versionCode is the pubspec build
+#   number (`0.1.0+1` → 1) and matches this recipe's `Builds:` entry.
 # - `commit` points at the published 0.1.0 commit on main. After the release
 #   tag `v0.1.0` is pushed, auto-update will track tags.
 
@@ -40,7 +43,7 @@ Builds:
     versionCode: 1
     commit: 2a358eb3d33dd8886c58c2463a204096788a089c
     subdir: app
-    output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+    output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
       - flutter@3.41.2
       - rustup@1.25.2
@@ -54,7 +57,7 @@ Builds:
       - $$rustup$$/rustup-init.sh -y --default-toolchain 1.98.1 --target aarch64-linux-android
       - source $HOME/.cargo/env
       - ABIS=arm64-v8a bash tool/build_rust_engine_android.sh
-      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define=USE_DEVICE_GPS=true --dart-define=MAP_VIEW=true
+      - $$flutter$$/bin/flutter build apk --release --target-platform android-arm64 --dart-define=USE_DEVICE_GPS=true --dart-define=MAP_VIEW=true
     ndk: 28.2.13676358
 
 AutoUpdateMode: Version
