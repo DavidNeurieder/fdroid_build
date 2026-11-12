@@ -1,0 +1,18 @@
+# Default settings for fdroid-github-builder (informational; scripts may read/extend later)
+
+fdroid:
+  # Command prefix; build.sh will prefer the repo-local .venv if present.
+  command: fdroid
+  # Additional args can be added here in future versions.
+  build_args:
+    - --verbose
+
+paths:
+  fdroiddata: fdroiddata
+  output: output
+  apps: apps
+  work: .work
+
+build:
+  # If true, wrappers may attempt to use server/isolated build modes when configured.
+  prefer_isolated: false

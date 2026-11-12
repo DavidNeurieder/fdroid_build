@@ -1,0 +1,45 @@
+# Editable F-Droid metadata recipe for AgainstYesterday
+# This is a starting point. Review and adjust application ID, versioning,
+# SDK/NDK versions, Flutter/Rust toolchains, and build commands for the
+# selected fdroidserver/fdroiddata environment.
+
+# TODO: set correct ApplicationID
+Categories:
+  - Internet
+
+License: Unknown
+
+SourceCode: https://github.com/DavidNeurieder/AgainstYesterday
+IssueTracker: https://github.com/DavidNeurieder/AgainstYesterday/issues
+
+RepoType: git
+Repo: https://github.com/DavidNeurieder/AgainstYesterday.git
+
+Builds:
+  - versionName: "0.0.1"
+    versionCode: 1
+    # TODO: set exact commit/tag
+    commit: HEAD
+    subdir: .
+    # Flutter + Rust (example template) - adjust to match project requirements.
+    # Ensure custom scripts run inside the F-Droid build environment.
+    sudo:
+      - apt-get update
+      - apt-get install -y curl unzip xz-utils git build-essential pkg-config
+    output: build/app/outputs/flutter-apk/app-release.apk
+    srclibs:
+      - flutter@stable
+      - rustup@master
+    build:
+      - $$rustup$$/rustup-init.sh -y
+      - source $HOME/.cargo/env
+      - rustup default stable
+      - ./app/tool/build_rust_engine_android.sh
+      - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get
+      - $$flutter$$/bin/flutter build apk --release
+
+AutoUpdateMode: None
+UpdateCheckMode: Tags
+CurrentVersion: "0.0.1"
+CurrentVersionCode: 1

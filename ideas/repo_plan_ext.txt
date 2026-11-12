@@ -1,0 +1,331 @@
+# Implementation plan: Set up a local F-Droid build environment
+
+The purpose of this repository is to install and configure the official F-Droid build toolchain locally, so you can build apps from GitHub using F-Droid's build process.
+
+We'll use Debian/Ubuntu Linux, `fdroidserver`, and the official `fdroiddata` repository.
+
+One important distinction: installing `fdroidserver` alone is not enough. We also need the Android SDK and a properly configured build environment. For builds that execute untrusted third-party code, the preferred setup is F-Droid's isolated build server using disposable virtual machines.
+
+## 1\. Target setup
+
+Your Linux machine
+
+Debian / Ubuntu
+
+F-Droid tools
+
+fdroidserver + fdroiddata
+
+F-Droid build server
+
+Isolated Debian build VM · Android SDK · NDK · Java
+
+Unsigned APK
+
+Available locally for installation and testing
+
+## 2\. Repository structure
+
+Create a repository called `local-fdroid-build`.
+
+text
+
+```text
+local-fdroid-build/
+├── README.md
+├── install.sh
+├── setup-buildserver.sh
+├── build.sh
+├── config/
+│   └── config.yml
+├── fdroidserver/
+│   └── (official source checkout)
+├── fdroiddata/
+│   └── (official metadata checkout)
+├── apps/
+│   └── AgainstYesterday/
+│       └── metadata.yml
+├── output/
+│   └── .gitkeep
+└── logs/
+    └── .gitkeep
+```
+
+The two official repositories should be cloned and maintained separately. Don't modify their tracked files unnecessarily.
+
+## 3\. Installation and configuration
+
+### Step 1 — Install system dependencies
+
+`install.sh` should install:
+
+- Git
+- Python 3 and virtual environment support
+- Java
+- Android SDK command-line tools
+- Android platform tools
+- Build essentials
+- KVM/QEMU and libvirt
+- Vagrant and its required integration
+
+Use Debian or Ubuntu as the supported host OS.
+
+### Step 2 — Install fdroidserver
+
+Clone the official repository:
+
+bash
+
+```bash
+git clone https://gitlab.com/fdroid/fdroidserver.git
+```
+
+Create the Python environment:
+
+bash
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install -e ./fdroidserver
+```
+
+Verify:
+
+bash
+
+```bash
+fdroid --version
+```
+
+The installer should pin or record the selected fdroidserver revision rather than silently tracking changes.
+
+### Step 3 — Clone fdroiddata
+
+bash
+
+```bash
+git clone https://gitlab.com/fdroid/fdroiddata.git
+```
+
+This provides the official app metadata and build recipes.
+
+### Step 4 — Configure Android SDK
+
+Set:
+
+bash
+
+```bash
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+```
+
+Install the SDK components required by the apps you intend to build.
+
+The exact SDK platforms, build-tools and NDK versions should come from each app's F-Droid metadata rather than assuming one version works for every app.
+
+Official reference: [Installing F-Droid Server and Repo Tools](<https://f-droid.org/docs/Installing_the_Server_and_Repo_Tools/?utm_source=chatgpt.com>).
+
+F-Droid
+
+## 4\. Set up the isolated F-Droid build server
+
+This is the part that makes the environment behave more like F-Droid's actual infrastructure.
+
+Use QEMU/KVM with libvirt rather than relying on a normal Docker container.
+
+`setup-buildserver.sh` should:
+
+1. Install the required virtualization packages.
+2. Configure libvirt and KVM.
+3. Create a dedicated unprivileged `fdroid` user.
+4. Configure the build server's VM provider.
+5. Run F-Droid's `makebuildserver` script.
+6. Verify that the build VM starts successfully.
+
+The relevant F-Droid configuration is:
+
+yaml
+
+```yaml
+# fdroidserver/buildserver/Vagrantfile.yaml
+vm_provider: libvirt
+```
+
+Then:
+
+bash
+
+```bash
+cd fdroidserver
+./makebuildserver --verbose
+```
+
+This creates the reusable F-Droid build server image.
+
+The first setup can take considerable time and disk space because it downloads and installs the Android SDK components.
+
+For your repository, the setup script should follow the current official instructions rather than hardcoding old package versions.
+
+F-Droid
+
+Documentation: [F-Droid Build Server Setup](<https://f-droid.org/docs/Build_Server_Setup/?utm_source=chatgpt.com>).
+
+## 5\. Configure fdroiddata
+
+Create the configuration:
+
+bash
+
+```bash
+cd fdroiddata
+cp ../fdroidserver/examples/config.yml config.yml
+```
+
+Enable isolated builds:
+
+yaml
+
+```yaml
+build_server_always: true
+```
+
+The configuration should also define the Android SDK location and other required paths according to the installed F-Droid version.
+
+## 6\. Test the local build environment
+
+Before adding your own applications, test with an existing F-Droid app.
+
+For example:
+
+bash
+
+```bash
+cd fdroiddata
+
+../fdroidserver/fdroid build org.fdroid.fdroid \
+  --latest \
+  --server \
+  --verbose
+```
+
+The test should confirm:
+
+- F-Droid metadata can be loaded.
+- The build VM starts.
+- Source code is retrieved.
+- Dependencies are prepared.
+- The application builds.
+- The resulting APK is copied back to the host.
+
+## 7\. Add AgainstYesterday
+
+Once the environment works, add a custom recipe for AgainstYesterday.
+
+Create:
+
+text
+
+```text
+fdroiddata/metadata/<application-id>.yml
+```
+
+The recipe needs to specify:
+
+- GitHub repository URL.
+- Exact source revision.
+- Android application ID.
+- Flutter build configuration.
+- Rust toolchain requirements.
+- Android NDK requirements.
+- Custom Rust build script.
+- Flutter release build command.
+
+The Rust build script must execute inside the isolated build environment, not on the host.
+
+Don't assume the standard Gradle recipe is sufficient for this project.
+
+## 8\. Main build wrapper
+
+Finally, `build.sh` should be very small:
+
+bash
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_ID="$1"
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+cd "$ROOT/fdroiddata"
+
+"$ROOT/fdroidserver/fdroid" readmeta
+
+"$ROOT/fdroidserver/fdroid" build \
+    "$APP_ID" \
+    --latest \
+    --server \
+    --verbose
+
+mkdir -p "$ROOT/output/$APP_ID"
+
+find unsigned -maxdepth 1 -name "${APP_ID}_*.apk" \
+    -exec cp {} "$ROOT/output/$APP_ID/" \;
+
+echo "Build completed: output/$APP_ID/"
+```
+
+This is an initial wrapper sketch; artifact naming and command options should be validated against the selected `fdroidserver` version.
+
+## 9\. Implementation milestones
+
+| Milestone | Deliverable |
+| --- | --- |
+| 1 | Install Debian/Ubuntu dependencies |
+| 2 | Install fdroidserver |
+| 3 | Clone fdroiddata |
+| 4 | Install and configure Android SDK |
+| 5 | Configure QEMU/KVM/libvirt |
+| 6 | Generate F-Droid build VM |
+| 7 | Successfully build an existing F-Droid app |
+| 8 | Add AgainstYesterday metadata |
+| 9 | Successfully build AgainstYesterday |
+| 10 | Add the simple `build.sh` wrapper |
+
+## 10\. Final expected usage
+
+Once everything is installed:
+
+bash
+
+```bash
+./build.sh org.example.app
+```
+
+And the resulting APK is available under:
+
+text
+
+```text
+output/org.example.app/
+```
+
+## Scope recommendation
+
+Keep this repository focused exclusively on setting up and maintaining the local F-Droid build environment.
+
+Do not implement:
+
+- A custom Android build system.
+- A Docker-based replacement for F-Droid's build VM.
+- An automated metadata generator initially.
+- A dashboard or database.
+- APK reproducibility comparisons yet.
+
+The first success criterion is simple: build one existing F-Droid application inside your local F-Droid VM. Then add AgainstYesterday.
+
+One practical question before implementation: are you running Ubuntu, Debian, or another Linux distribution? That determines the exact installation and virtualization setup.

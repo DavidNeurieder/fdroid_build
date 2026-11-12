@@ -1,0 +1,255 @@
+# Implementation plan: `fdroid-github-builder`
+
+A small repository that lets you build Android apps from GitHub using the official F-Droid build chain.
+
+The goal is to make this work:
+
+bash
+
+```bash
+./build.sh https://github.com/DavidNeurieder/AgainstYesterday
+```
+
+The script prepares the source, creates or loads an F-Droid build recipe, and invokes `fdroid build`.
+
+No dashboard, database, background workers or separate build system.
+
+## 1. Repository structure
+
+text
+
+```text
+fdroid-github-builder/
+├── README.md
+├── install.sh
+├── build.sh
+├── config/
+│   └── defaults.yml
+├── templates/
+│   └── app.yml
+├── apps/
+│   └── AgainstYesterday/
+│       ├── metadata.yml
+│       └── patches/
+├── fdroiddata/
+│   └── .gitkeep
+├── output/
+│   └── .gitkeep
+└── scripts/
+    ├── detect-app-id.sh
+    ├── detect-build-system.sh
+    └── prepare-build.sh
+```
+
+The `fdroiddata` directory will contain a local working copy of the official F-Droid metadata repository.
+
+## 2. Installation script
+
+`install.sh` should:
+
+1. Check that Python, Git and Podman are installed.
+2. Create a Python virtual environment.
+3. Install `fdroidserver`.
+4. Clone official `fdroiddata`.
+5. Create required directories.
+6. Check that F-Droid tooling is available.
+
+Usage:
+
+bash
+
+```bash
+./install.sh
+```
+
+## 3. Main wrapper
+
+`build.sh` is the main entry point.
+
+Expected usage:
+
+bash
+
+```bash
+# Build latest default branch
+./build.sh https://github.com/user/app
+
+# Build a specific branch or tag
+./build.sh https://github.com/user/app --ref v1.0.0
+
+# Build a specific commit
+./build.sh https://github.com/user/app --commit abc123
+
+# Rebuild using an existing recipe
+./build.sh https://github.com/user/app --existing
+```
+
+Its responsibilities:
+
+1. Validate the GitHub URL.
+2. Clone the repository.
+3. Determine the source revision.
+4. Detect the Android application ID.
+5. Detect the build system.
+6. Load an existing recipe or create a template.
+7. Prepare the F-Droid build environment.
+8. Execute `fdroid build`.
+9. Copy the resulting APK into `output/`.
+
+## 4. Build recipe template
+
+The wrapper should generate an F-Droid metadata YAML file.
+
+For example:
+
+yaml
+
+```yaml
+Categories:
+  - System
+
+License: GPL-3.0-or-later
+
+SourceCode: https://github.com/USER/REPOSITORY
+
+RepoType: git
+Repo: https://github.com/USER/REPOSITORY
+
+Builds:
+  - versionName: 1.0
+    versionCode: 1
+    commit: COMMIT
+
+    subdir: app
+
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0
+CurrentVersionCode: 1
+```
+
+This is only a template. The wrapper must not assume that every GitHub project uses Gradle, or that these version values are correct.
+
+For projects requiring custom build instructions, the generated recipe should be editable before building.
+
+## 5. Build-system detection
+
+Initially support just three cases:
+
+| Project type | Detection | Build approach |
+| --- | --- | --- |
+| Native Android | `build.gradle` / `build.gradle.kts` | F-Droid Gradle |
+| Flutter | `pubspec.yaml` | Flutter build instructions |
+| Flutter + Rust | Flutter + `Cargo.toml` | Custom F-Droid build instructions |
+
+For AgainstYesterday, the recipe needs to invoke:
+
+bash
+
+```bash
+./app/tool/build_rust_engine_android.sh
+```
+
+before building the Flutter APK.
+
+Don't automatically execute arbitrary detected scripts without making the recipe visible for review.
+
+## 6. Build execution
+
+The wrapper should invoke the official F-Droid tooling from the local `fdroiddata` checkout.
+
+Conceptually:
+
+bash
+
+```bash
+cd fdroiddata
+
+fdroid readmeta
+fdroid build APPLICATION_ID
+```
+
+Use the installed version's documented build options and configure the F-Droid build server separately if needed.
+
+The important point is that the wrapper should not independently invoke Gradle or Flutter as a replacement for F-Droid's build process.
+
+## 7. Output
+
+Keep the output very simple:
+
+text
+
+```text
+output/
+└── AgainstYesterday/
+    ├── app-release-unsigned.apk
+    ├── build.log
+    └── metadata.yml
+```
+
+At the end, print:
+
+text
+
+```text
+=================================
+ F-Droid build finished
+=================================
+
+Application: AgainstYesterday
+Application ID: ...
+Source: https://github.com/...
+
+Build status: SUCCESS
+
+APK:
+output/AgainstYesterday/app-release-unsigned.apk
+```
+
+The output filename should be derived from the actual generated artifact, not assumed.
+
+## 8. Implementation milestones
+
+| Milestone | Task | Priority |
+| --- | --- | --- |
+| 1 | Install F-Droid tooling | Critical |
+| 2 | Clone and configure fdroiddata | Critical |
+| 3 | Implement GitHub cloning and revision selection | Critical |
+| 4 | Detect application ID and build system | High |
+| 5 | Generate editable metadata template | High |
+| 6 | Invoke `fdroid build` | Critical |
+| 7 | Collect APK and logs | High |
+| 8 | Add Flutter support | High |
+| 9 | Add Flutter + Rust support | High |
+
+## 9. Important design decisions
+
+I'd enforce four simple rules:
+
+- F-Droid is the build engine. Don't implement a parallel build system.
+- Metadata is editable. Automatically generated recipes are starting points, not guaranteed valid recipes.
+- Build environments are isolated. Don't execute arbitrary GitHub build scripts on the host.
+- Don't modify the upstream repository. All generated metadata, patches and build artifacts stay in this wrapper repository.
+
+## 10. Definition of done
+
+The first release should support:
+
+bash
+
+```bash
+./install.sh
+
+./build.sh https://github.com/someuser/native-android-app
+
+./build.sh https://github.com/someuser/flutter-app
+
+./build.sh https://github.com/DavidNeurieder/AgainstYesterday
+```
+
+The first two should work for projects with compatible build configurations. AgainstYesterday is the integration test for custom Flutter/Rust instructions.
+
+My recommendation: Keep version 1 to these three build types and a single wrapper script. Don't add automated F-Droid metadata submission, reproducibility comparison or a web interface yet. The only job of this repository should be to turn a GitHub Android repository into an APK using F-Droid's build chain.

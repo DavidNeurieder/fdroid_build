@@ -1,0 +1,33 @@
+Categories:
+  - Internet
+
+License: Unknown
+
+AuthorName: __AUTHOR__
+AuthorWebSite: __REPO_URL__
+WebSite: __REPO_URL__
+SourceCode: __REPO_URL__
+IssueTracker: __REPO_URL__/issues
+
+RepoType: git
+Repo: __REPO_URL__.git
+
+Builds:
+  - versionName: "0.0.1"
+    versionCode: 1
+    commit: __COMMIT__
+    subdir: __SUBDIR__
+__BUILD_BLOCK__
+    # Uncomment and adjust if needed:
+    # sudo:
+    #   - apt-get update
+    #   - apt-get install -y ...
+    # prebuild:
+    #   - echo "prebuild steps"
+    # scandelete:
+    #   - build
+
+AutoUpdateMode: None
+UpdateCheckMode: Tags
+CurrentVersion: "0.0.1"
+CurrentVersionCode: 1

@@ -1,0 +1,330 @@
+# Local F-Droid build setup on Arch Linux
+
+For Arch Linux, I'd use fdroidserver directly from Git, with QEMU/KVM, libvirt and Vagrant.
+
+Arch is supported as a development platform by F-Droid, but its build-server documentation primarily targets Debian-based systems. The important distinction is that the F-Droid build VM itself is Debian, even though your host is Arch.
+
+cloudflare.f-droid.org
+
++1
+
+The implementation should therefore have two parts:
+
+- Arch Linux host setup.
+- Debian-based F-Droid build VM setup.
+
+## 1\. Target architecture
+
+Arch Linux host
+
+Python · Git · QEMU · KVM · libvirt · Vagrant
+
+fdroidserver
+
+Local checkout and Python virtual environment
+
+Debian F-Droid build VM
+
+Android SDK · NDK · Java · build dependencies
+
+Unsigned APK
+
+Returned to Arch Linux
+
+## 2\. Install Arch dependencies
+
+Create `install.sh`:
+
+bash
+
+```bash
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+sudo pacman -Syu --needed \
+  git \
+  base-devel \
+  python \
+  python-pip \
+  python-virtualenv \
+  python-yaml \
+  python-requests \
+  python-gitpython \
+  python-paramiko \
+  python-clint \
+  python-progressbar \
+  python-pyasn1 \
+  python-pyasn1-modules \
+  python-defusedxml \
+  python-apache-libcloud \
+  qemu-full \
+  libvirt \
+  dnsmasq \
+  vagrant \
+  virt-install \
+  virt-manager \
+  edk2-ovmf \
+  ebtables \
+  iptables-nft \
+  bridge-utils
+
+echo "Arch dependencies installed."
+```
+
+Package availability and names should be checked against the current Arch repositories before treating this list as a finished installer.
+
+## 3\. Configure virtualization
+
+Enable libvirt:
+
+bash
+
+```bash
+sudo systemctl enable --now libvirtd
+```
+
+Add your user to the relevant groups:
+
+bash
+
+```bash
+sudo usermod -aG libvirt,kvm "$USER"
+```
+
+Log out and back in.
+
+Check hardware virtualization:
+
+bash
+
+```bash
+lscpu | grep Virtualization
+```
+
+Check KVM:
+
+bash
+
+```bash
+ls -l /dev/kvm
+```
+
+Check libvirt:
+
+bash
+
+```bash
+virsh -c qemu:///system list --all
+```
+
+If `/dev/kvm` is missing, check BIOS/UEFI virtualization settings and the appropriate Intel or AMD KVM kernel module.
+
+For Vagrant, install the libvirt provider:
+
+bash
+
+```bash
+vagrant plugin install vagrant-libvirt
+```
+
+Check:
+
+bash
+
+```bash
+vagrant plugin list
+```
+
+Note that Vagrant's libvirt plugin can have compatibility issues with Arch's Ruby packaging. If this becomes problematic, use the official F-Droid Docker-based tool installation route or a dedicated Debian VM for the build-server host rather than spending time fighting the provider.
+
+ArchWiki
+
+## 4\. Clone and install fdroidserver
+
+Create the workspace:
+
+bash
+
+```bash
+mkdir -p ~/fdroid-local
+cd ~/fdroid-local
+
+git clone https://gitlab.com/fdroid/fdroidserver.git
+git clone https://gitlab.com/fdroid/fdroiddata.git
+```
+
+Create a virtual environment:
+
+bash
+
+```bash
+cd fdroidserver
+
+python -m venv .venv
+source .venv/bin/activate
+
+pip install -e .
+```
+
+Verify:
+
+bash
+
+```bash
+./fdroid --version
+```
+
+F-Droid explicitly recommends a virtual environment on Arch to avoid conflicts between system Python packages and PyPI dependencies.
+
+cloudflare.f-droid.org
+
+## 5\. Configure the F-Droid build server
+
+Create:
+
+text
+
+```text
+~/fdroid-local/fdroidserver/buildserver/Vagrantfile.yaml
+```
+
+Contents:
+
+yaml
+
+```yaml
+vm_provider: libvirt
+```
+
+Then configure the build metadata repository:
+
+bash
+
+```bash
+cd ~/fdroid-local/fdroiddata
+
+cp ../fdroidserver/examples/config.yml config.yml
+```
+
+Enable server builds:
+
+yaml
+
+```yaml
+build_server_always: true
+```
+
+Keep the rest of the example configuration intact initially.
+
+## 6\. Generate the Debian build VM
+
+Run:
+
+bash
+
+```bash
+cd ~/fdroid-local/fdroidserver
+
+./makebuildserver --verbose
+```
+
+This is the largest setup step.
+
+It downloads the Debian base box and provisions the Android build environment.
+
+Allow sufficient disk space and time. The resulting VM is reused for subsequent builds.
+
+The official instructions describe this process here:
+
+[F-Droid Build Server Setup](<https://f-droid.org/docs/Build_Server_Setup/?utm_source=chatgpt.com>).
+
+Arch compatibility caveat: The F-Droid build VM is Debian, but the build-server provisioning scripts are primarily documented for Debian/Ubuntu hosts. Treat running `makebuildserver` natively on Arch as a compatibility test, not a guaranteed supported configuration. If it fails because of host dependencies or Vagrant integration, run the F-Droid host tooling inside a Debian VM on your Arch machine.
+
+## 7\. Test the environment
+
+Before adding AgainstYesterday, build an existing F-Droid application:
+
+bash
+
+```bash
+cd ~/fdroid-local/fdroiddata
+
+../fdroidserver/fdroid readmeta
+
+../fdroidserver/fdroid build \
+  org.fdroid.fdroid \
+  --latest \
+  --server \
+  --verbose
+```
+
+Success means the VM starts and the build completes.
+
+The resulting unsigned APK should appear in:
+
+text
+
+```text
+~/fdroid-local/fdroiddata/unsigned/
+```
+
+## 8\. Add AgainstYesterday
+
+Once the test succeeds, create its F-Droid metadata recipe:
+
+text
+
+```text
+fdroiddata/metadata/<application-id>.yml
+```
+
+The recipe will need to handle:
+
+- Flutter dependencies.
+- Rust dependencies.
+- Android NDK.
+- `app/tool/build_rust_engine_android.sh`.
+- Flutter release APK generation.
+
+Keep this as a separate implementation task after the build VM is working.
+
+## 9\. Final repository structure
+
+text
+
+```text
+
+local-fdroid-build/
+├── README.md
+├── install.sh
+├── setup-buildserver.sh
+├── build.sh
+├── fdroidserver/
+│   ├── .venv/
+│   └── buildserver/
+│       └── Vagrantfile.yaml
+├── fdroiddata/
+│   ├── config.yml
+│   ├── metadata/
+│   └── unsigned/
+└── output/
+```
+
+## 10\. Implementation order
+
+| Step | Task | Expected result |
+| --- | --- | --- |
+| 1 | Install Arch packages | Dependencies ready |
+| 2 | Configure KVM/libvirt | Virtualization works |
+| 3 | Install Vagrant provider | VM management works |
+| 4 | Clone fdroidserver | F-Droid CLI available |
+| 5 | Clone fdroiddata | Metadata available |
+| 6 | Configure build server | Debian VM configured |
+| 7 | Run makebuildserver | Build VM created |
+| 8 | Test official F-Droid app | First successful build |
+| 9 | Add AgainstYesterday recipe | Custom app build |
+
+My recommendation: First get steps 1–8 working without any custom wrapper. Once the official F-Droid build works, add `build.sh` as a convenience layer.
+
+That avoids debugging Arch compatibility, Vagrant, F-Droid metadata and Flutter/Rust integration simultaneously.
