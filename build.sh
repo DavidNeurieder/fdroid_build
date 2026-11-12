@@ -163,7 +163,9 @@ set +e
   set -euo pipefail
   cd "$ROOT/fdroiddata"
   log "Running: fdroid readmeta"
-  "${FDROID_CMD[@]}" readmeta
+  if ! "${FDROID_CMD[@]}" readmeta; then
+    warn "fdroid readmeta failed (continuing to attempt build for ${META_APP_ID})"
+  fi
   log "Running: fdroid build ${META_APP_ID} --verbose"
   "${FDROID_CMD[@]}" build "$META_APP_ID" --verbose
 ) 2>&1 | tee "$BUILD_LOG"
