@@ -1,45 +1,64 @@
-# Editable F-Droid metadata recipe for AgainstYesterday
-# This is a starting point. Review and adjust application ID, versioning,
-# SDK/NDK versions, Flutter/Rust toolchains, and build commands for the
-# selected fdroidserver/fdroiddata environment.
+# F-Droid metadata for Against Yesterday (app.against_yesterday).
+#
+# Recipe notes:
+# - Flutter 3.41.2 and Rust are fetched as source libraries, so the build does
+#   not rely on pre-installed toolchains.
+# - The buildserver is Debian trixie, whose default JDK is 21 (required by
+#   MapLibre), so no sudo/JDK package installation is needed.
+# - Release APKs are intentionally unsigned; F-Droid signs them itself.
+# - Android artifacts are arm64-v8a only, matching the repo's `make
+#   build-release` default, so the build produces a single APK.
+# - `commit` points at the published 0.1.0 commit on main. After the release
+#   tag `v0.1.0` is pushed, auto-update will track tags.
 
-# TODO: set correct ApplicationID
+AntiFeatures:
+  TetheredNet:
+    en-US: The default map style and tiles are loaded from OpenFreeMap
+      (https://openfreemap.org); the endpoint is fixed at build time.
+
 Categories:
-  - Internet
+  - Navigation
+  - Sports & Health
 
-License: Unknown
+License: AGPL-3.0-or-later
 
+AuthorName: David Neurieder
+AuthorWebSite: https://github.com/DavidNeurieder
+WebSite: https://davidneurieder.github.io/AgainstYesterday/
 SourceCode: https://github.com/DavidNeurieder/AgainstYesterday
 IssueTracker: https://github.com/DavidNeurieder/AgainstYesterday/issues
+Changelog: https://github.com/DavidNeurieder/AgainstYesterday/blob/HEAD/CHANGELOG.md
+
+AutoName: Against Yesterday
+Summary: Race your runs against your personal best
 
 RepoType: git
 Repo: https://github.com/DavidNeurieder/AgainstYesterday.git
 
 Builds:
-  - versionName: "0.0.1"
+  - versionName: 0.1.0
     versionCode: 1
-    # TODO: set exact commit/tag
-    commit: HEAD
-    subdir: .
-    # Flutter + Rust (example template) - adjust to match project requirements.
-    # Ensure custom scripts run inside the F-Droid build environment.
-    sudo:
-      - apt-get update
-      - apt-get install -y curl unzip xz-utils git build-essential pkg-config
-    output: build/app/outputs/flutter-apk/app-release.apk
+    commit: ea932d6caf03bb39a8e624857d9d5c38b89b0767
+    subdir: app
+    output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
     srclibs:
-      - flutter@stable
-      - rustup@master
-    build:
-      - $$rustup$$/rustup-init.sh -y
-      - source $HOME/.cargo/env
-      - rustup default stable
-      - ./app/tool/build_rust_engine_android.sh
+      - flutter@3.41.2
+      - rustup@1.25.2
+    prebuild:
+      - export PUB_CACHE=$HOME/.pub-cache
       - $$flutter$$/bin/flutter config --no-analytics
-      - $$flutter$$/bin/flutter pub get
-      - $$flutter$$/bin/flutter build apk --release
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - bash tool/fdroid_prebuild.sh
+    build:
+      - export PUB_CACHE=$HOME/.pub-cache
+      - $$rustup$$/rustup-init.sh -y --default-toolchain 1.98.1 --target aarch64-linux-android
+      - source $HOME/.cargo/env
+      - ABIS=arm64-v8a bash tool/build_rust_engine_android.sh
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define=USE_DEVICE_GPS=true --dart-define=MAP_VIEW=true
+    ndk: 28.2.13676358
 
-AutoUpdateMode: None
+AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: "0.0.1"
+UpdateCheckData: app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: 0.1.0
 CurrentVersionCode: 1
