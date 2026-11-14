@@ -42,8 +42,11 @@ This repo implements the plans in `ideas/`:
 ### Install
 ```bash
 ./install.sh
+# or: make install
+
 # Optional (best-effort host dependency install):
-# ./install.sh --system-deps
+./install.sh --system-deps
+# or: make install-system-deps
 ```
 
 `install.sh` will:
@@ -61,6 +64,7 @@ F-Droid's build server approach uses a Debian VM provisioned via `fdroidserver/b
 
 ```bash
 ./setup-buildserver.sh
+# or: make setup-buildserver
 ```
 
 This script:
@@ -79,16 +83,22 @@ Notes:
 ```bash
 # Build latest default branch
 ./build.sh https://github.com/user/app
+# or: make build URL=https://github.com/user/app
 
 # Build a specific branch or tag
 ./build.sh https://github.com/user/app --ref v1.0.0
+# or: make build-ref URL=https://github.com/user/app REF=v1.0.0
 
 # Build a specific commit
 ./build.sh https://github.com/user/app --commit abc123
+# or: make build-commit URL=https://github.com/user/app COMMIT=abc123
 
 # Rebuild using an existing recipe in apps/<AppName>/metadata.yml
 ./build.sh https://github.com/user/app --existing
+# or: make build-existing URL=https://github.com/user/app
 ```
+
+Useful Make targets: `make help`, `make check`, `make status`, `make build-againstyesterday`, `make build-librecrate`, `make logs APP=<RepoName>`, `make detect SRC=/path/to/source`, `make clean-work`.
 
 What `build.sh` does:
 1. Clones the source repo into `.work/` (upstream repo is never modified).

@@ -18,3 +18,6 @@
 *.swo
 .idea/
 .vscode/
+
+
+/apps/AgainstYesterday/metadata2.yml

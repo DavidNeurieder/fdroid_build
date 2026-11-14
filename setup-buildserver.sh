@@ -8,14 +8,30 @@ log() { printf '[setup-buildserver] %s\n' "$*"; }
 warn() { printf '[setup-buildserver] WARN: %s\n' "$*" >&2; }
 die() { printf '[setup-buildserver] ERROR: %s\n' "$*" >&2; exit 1; }
 
-need_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+has_cmd() {
+  command -v "$1" >/dev/null 2>&1
 }
 
 log "Checking virtualization prerequisites..."
-need_cmd qemu-system-x86_64 || true
-need_cmd virsh
-need_cmd vagrant
+
+missing=()
+has_cmd qemu-system-x86_64 || missing+=("qemu-system-x86_64 (qemu)")
+has_cmd virsh || missing+=("virsh (libvirt)")
+has_cmd vagrant || missing+=("vagrant")
+
+if [ "${#missing[@]}" -gt 0 ]; then
+  warn "Missing required command(s): ${missing[*]}"
+  echo "[setup-buildserver] Install host virtualization dependencies, then re-run:" >&2
+  if has_cmd pacman; then
+    echo "  sudo pacman -S --needed qemu-full libvirt dnsmasq vagrant virt-manager edk2-ovmf bridge-utils" >&2
+  elif has_cmd apt-get; then
+    echo "  sudo apt-get update && sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients vagrant bridge-utils" >&2
+  else
+    echo "  Install QEMU/KVM, libvirt, and Vagrant for your distribution." >&2
+  fi
+  echo "  # after install: sudo systemctl enable --now libvirtd && vagrant plugin install vagrant-libvirt" >&2
+  exit 1
+fi
 
 if [ ! -e /dev/kvm ]; then
   warn "/dev/kvm not found. Enable virtualization in BIOS/UEFI and load kvm modules."
