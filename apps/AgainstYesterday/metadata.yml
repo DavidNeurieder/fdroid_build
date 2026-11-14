@@ -13,6 +13,7 @@
 #   number and matches this recipe's `Builds:` entry.
 # - `commit` points at the published 0.1.0 commit on main. AutoUpdateMode
 #   tracks tags, so new releases are picked up automatically.
+# - Pinned toolchain versions live in versions.yml (single source of truth).
 
 AntiFeatures:
   TetheredNet:
