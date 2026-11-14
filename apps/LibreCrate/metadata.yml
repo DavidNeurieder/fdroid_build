@@ -26,8 +26,8 @@ Builds:
     gradle:
       - yes
     prebuild:
-      - rustup default 1.94.0
-      - rustup target add aarch64-linux-android
+      # Install Rust toolchain/targets from the repo pin (vault-native/rust-toolchain.toml)
+      - cd ../vault-native && rustup show
     scandelete:
       - fuzz
       - app/src/androidTest/resources/upgrade_v0_5_6_seed.tar.gz
