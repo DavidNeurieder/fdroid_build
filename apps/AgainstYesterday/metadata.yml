@@ -42,7 +42,7 @@ Repo: https://github.com/DavidNeurieder/AgainstYesterday.git
 Builds:
   - versionName: 0.1.0
     versionCode: 1
-    commit: 2a358eb3d33dd8886c58c2463a204096788a089c
+    commit: ae9f674716af0d01ca022b60d784e834575ebee5
     subdir: app
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
