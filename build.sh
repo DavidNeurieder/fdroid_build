@@ -172,26 +172,61 @@ set +e
 RC=${PIPESTATUS[0]}
 set -e
 
-# Collect artifacts
+# Collect artifacts (only for this app; clear stale APKs in output first)
+rm -f "$OUT_DIR"/*.apk 2>/dev/null || true
 FOUND_APK=0
-for d in "$ROOT/fdroiddata/unsigned" "$ROOT/fdroiddata/repo" "$ROOT/fdroiddata/build/$META_APP_ID" "$ROOT/fdroiddata/tmp"; do
-  if [ -d "$d" ]; then
-    while IFS= read -r -d '' apk; do
-      cp "$apk" "$OUT_DIR/"
+
+copy_apk_if_match() {
+  local apk="$1"
+  local base
+  base="$(basename "$apk")"
+  # Accept APKs clearly belonging to this app id or built in app-specific dirs
+  case "$base" in
+    "${META_APP_ID}_"*.apk|\
+    "${META_APP_ID}-"*.apk|\
+    "${META_APP_ID}."*.apk)
+      cp -f "$apk" "$OUT_DIR/"
       FOUND_APK=1
-    done < <(find "$d" -type f -name '*.apk' -print0 2>/dev/null || true)
-  fi
+      ;;
+  esac
+}
+
+# Shared dirs: copy only APKs for this application id
+for d in "$ROOT/fdroiddata/unsigned" "$ROOT/fdroiddata/repo" "$ROOT/fdroiddata/tmp"; do
+  [ -d "$d" ] || continue
+  while IFS= read -r -d '' apk; do
+    copy_apk_if_match "$apk"
+  done < <(find "$d" -maxdepth 1 -type f -name '*.apk' -print0 2>/dev/null || true)
 done
+
+# App-specific build dir: copy APKs produced for this app
+if [ -d "$ROOT/fdroiddata/build/$META_APP_ID" ]; then
+  while IFS= read -r -d '' apk; do
+    base="$(basename "$apk")"
+    if [[ "$base" == "${META_APP_ID}"* ]] || [[ "$apk" == *"/$META_APP_ID/"* ]]; then
+      cp -f "$apk" "$OUT_DIR/"
+      FOUND_APK=1
+    else
+      # Fallback: include build outputs from this app's build dir (e.g. app-release.apk)
+      cp -f "$apk" "$OUT_DIR/"
+      FOUND_APK=1
+    fi
+  done < <(find "$ROOT/fdroiddata/build/$META_APP_ID" -type f -name '*.apk' -print0 2>/dev/null || true)
+fi
 
 cp "$FDROID_META_DIR/${META_APP_ID}.yml" "$OUT_DIR/metadata.yml" 2>/dev/null || cp "$RECIPE_PATH" "$OUT_DIR/metadata.yml" || true
 
-if [ "$RC" -eq 0 ]; then
+if [ "$RC" -eq 0 ] && [ "$FOUND_APK" -eq 1 ]; then
   STATUS="SUCCESS"
+elif [ "$RC" -eq 0 ] && [ "$FOUND_APK" -ne 1 ]; then
+  STATUS="SUCCESS (no APK copied)"
+else
+  STATUS="FAILURE"
 fi
 
 APK_PATH="(not found)"
 if [ "$FOUND_APK" -eq 1 ]; then
-  APK_PATH="$(find "$OUT_DIR" -maxdepth 1 -type f -name '*.apk' | head -n 1 || true)"
+  APK_PATH="$(find "$OUT_DIR" -maxdepth 1 -type f -name '*.apk' | sort | head -n 1 || true)"
   [ -n "$APK_PATH" ] || APK_PATH="(copied, see output dir)"
 fi
 
@@ -218,7 +253,9 @@ Metadata:
 ${OUT_DIR}/metadata.yml
 EOF
 
-[ "$RC" -eq 0 ] || exit "$RC"
+if [ "$RC" -ne 0 ]; then
+  exit "$RC"
+fi
 if [ "$FOUND_APK" -ne 1 ]; then
-  warn "Build reported success but no APK was found/copied. Check build.log and fdroiddata outputs."
+  warn "Build completed but no APK was found/copied for ${META_APP_ID}. Check build.log and fdroiddata outputs."
 fi
