@@ -1,44 +1,17 @@
-# F-Droid metadata for Against Yesterday (app.against_yesterday).
-#
-# Recipe notes:
-# - Flutter and Rust are fetched as source libraries, so the build does not
-#   rely on pre-installed toolchains.
-# - The buildserver is Debian trixie with JDK 21 (required by MapLibre), but
-#   the bare image has no C toolchain. The sudo step installs build-essential
-#   so Rust host build scripts can link.
-# - Release APKs are intentionally unsigned; F-Droid signs them itself.
-# - Android artifacts are arm64-v8a only, matching the repo's `make
-#   build-release` default, so the build produces a single APK (Gradle filters
-#   the native libs to that ABI).
-# - The APK is not split per ABI, so its versionCode is the pubspec build
-#   number and matches this recipe's `Builds:` entry.
-# - `commit` pins the source used for this 0.2.0 build. AutoUpdateMode tracks
-#   tags, so new releases are picked up automatically.
-# - Toolchain refs are pinned below (Flutter 3.41.2, rustup 1.25.2, NDK
-#   28.2.13676358) so `flutter pub get --enforce-lockfile` stays reproducible.
-# - The Rust compiler version comes from rust-toolchain.toml in the source
-#   repo, so the rustup default channel does not affect the engine build.
-# - `tool/repro_build.sh` builds from /tmp/against-yesterday-repro-build. Dart
-#   AOT embeds that absolute path in libapp.so; fixing it is what makes the
-#   F-Droid APK byte-identical to a local `make build-release`.
-
 AntiFeatures:
   TetheredNet:
-    en-US: The default map style and tiles are loaded from OpenFreeMap
-      (https://openfreemap.org); the endpoint is fixed at build time.
-
+    en-US: The default map style and tiles are loaded from OpenFreeMap (https://openfreemap.org);
+      the endpoint is fixed at build time.
 Categories:
   - Navigation
   - Sports & Health
-
 License: AGPL-3.0-or-later
-
 AuthorName: David Neurieder
 AuthorWebSite: https://davidneurieder.github.io/
 SourceCode: https://github.com/DavidNeurieder/AgainstYesterday
 IssueTracker: https://github.com/DavidNeurieder/AgainstYesterday/issues
 
-AutoName: AgainstYesterday
+AutoName: Against Yesterday
 
 RepoType: git
 Repo: https://github.com/DavidNeurieder/AgainstYesterday
