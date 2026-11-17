@@ -11,9 +11,12 @@
 #   the native libs to that ABI).
 # - The APK is not split per ABI, so its versionCode is the pubspec build
 #   number and matches this recipe's `Builds:` entry.
-# - `commit` points at the published 0.1.0 commit on main. AutoUpdateMode
-#   tracks tags, so new releases are picked up automatically.
-# - Pinned toolchain versions live in versions.yml (single source of truth).
+# - `commit` pins the source used for this 0.1.0 build. AutoUpdateMode tracks
+#   tags, so new releases are picked up automatically.
+# - Toolchain refs are pinned below (Flutter 3.41.2, rustup 1.25.2, NDK
+#   28.2.13676358) so `flutter pub get --enforce-lockfile` stays reproducible.
+# - The Rust compiler version comes from rust-toolchain.toml in the source
+#   repo, so the rustup default channel does not affect the engine build.
 
 AntiFeatures:
   TetheredNet:
@@ -27,27 +30,24 @@ Categories:
 License: AGPL-3.0-or-later
 
 AuthorName: David Neurieder
-AuthorWebSite: https://github.com/DavidNeurieder
-WebSite: https://davidneurieder.github.io/AgainstYesterday/
+AuthorWebSite: https://davidneurieder.github.io/
 SourceCode: https://github.com/DavidNeurieder/AgainstYesterday
 IssueTracker: https://github.com/DavidNeurieder/AgainstYesterday/issues
-Changelog: https://github.com/DavidNeurieder/AgainstYesterday/blob/HEAD/CHANGELOG.md
 
-AutoName: Against Yesterday
-Summary: Race your runs against your personal best
+AutoName: AgainstYesterday
 
 RepoType: git
-Repo: https://github.com/DavidNeurieder/AgainstYesterday.git
+Repo: https://github.com/DavidNeurieder/AgainstYesterday
 
 Builds:
   - versionName: 0.1.0
     versionCode: 1
-    commit: ae9f674716af0d01ca022b60d784e834575ebee5
+    commit: 29a78efe4d19a8638084a02805fa236f3a524233
     subdir: app
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
-      - flutter@stable
-      - rustup
+      - flutter@3.41.2
+      - rustup@1.25.2
     prebuild:
       - export PUB_CACHE=$HOME/.pub-cache
       - $$flutter$$/bin/flutter config --no-analytics
@@ -58,8 +58,10 @@ Builds:
       - $$rustup$$/rustup-init.sh -y --default-toolchain stable --target aarch64-linux-android
       - source $HOME/.cargo/env
       - ABIS=arm64-v8a bash tool/build_rust_engine_android.sh
-      - $$flutter$$/bin/flutter build apk --release --target-platform android-arm64 --dart-define=USE_DEVICE_GPS=true --dart-define=MAP_VIEW=true
-    ndk: r28c
+      - $$flutter$$/bin/flutter build apk --release --target-platform android-arm64
+    ndk: 28.2.13676358
+
+AllowedAPKSigningKeys: ee4f4967b060bc9533155b9b5e44da639a61d512b872e713d3bc0bf299a9fe9e
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
