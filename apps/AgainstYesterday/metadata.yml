@@ -3,8 +3,9 @@
 # Recipe notes:
 # - Flutter and Rust are fetched as source libraries, so the build does not
 #   rely on pre-installed toolchains.
-# - The buildserver is Debian trixie, whose default JDK is 21 (required by
-#   MapLibre), so no sudo/JDK package installation is needed.
+# - The buildserver is Debian trixie with JDK 21 (required by MapLibre), but
+#   the bare image has no C toolchain. The sudo step installs build-essential
+#   so Rust host build scripts can link.
 # - Release APKs are intentionally unsigned; F-Droid signs them itself.
 # - Android artifacts are arm64-v8a only, matching the repo's `make
 #   build-release` default, so the build produces a single APK (Gradle filters
@@ -45,8 +46,11 @@ Repo: https://github.com/DavidNeurieder/AgainstYesterday
 Builds:
   - versionName: 0.2.0
     versionCode: 2
-    commit: 4f9edfee28ad00cd0fdff2b1a4b8415a9b3ca17a
+    commit: ee90739b8573e23217eda969b766aaed456e52e7
     subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install -y build-essential
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
       - flutter@3.41.2
